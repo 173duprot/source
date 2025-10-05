@@ -18,7 +18,7 @@ const App = struct {
     fn init() App {
         var self = App{
             .renderer = r.Renderer.init(r.Mesh.cube(), .{ 0.25, 0.5, 0.75, 1.0 }),
-            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), Vec3.new(0, 1, 0), 60.0),
+            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
         };
         self.renderer.shader(shd.cubeShaderDesc(sokol.gfx.queryBackend()));
         return self;
@@ -35,12 +35,12 @@ const App = struct {
         if (move.x != 0) {
             const right = self.camera.right();
             const offset = Vec3.new(right.x(), 0, right.z()).norm().scale(move.x * speed);
-            self.camera.translate(offset);
+            self.camera.move(offset);
         }
         if (move.y != 0) {
             const forward = self.camera.forward();
             const offset = Vec3.new(forward.x(), 0, forward.z()).norm().scale(move.y * speed);
-            self.camera.translate(offset);
+            self.camera.move(offset);
         }
 
         // Physics update
@@ -53,8 +53,7 @@ const App = struct {
 
         // Mouse look
         if (self.io.mouse.isLocked()) {
-            self.camera.rotate(Vec3.up(), -self.io.mouse.dx * 0.002, self.camera.position);
-            self.camera.rotate(self.camera.right(), -self.io.mouse.dy * 0.002, self.camera.position);
+            self.camera.look(self.io.mouse.dx * 0.002, -self.io.mouse.dy * 0.002);
         }
 
         if (self.io.justPressed(.escape)) self.io.mouse.unlock();
