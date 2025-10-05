@@ -28,7 +28,7 @@ const App = struct {
         const dt: f32 = @floatCast(sapp.frameDuration());
         self.angle += dt * 60;
 
-        // Camera movement - horizontal only (don't affect Y)
+        // Camera movement
         const speed: f32 = 0.1 * dt * 60;
         const move = self.io.vec2(.a, .d, .s, .w);
 
@@ -48,7 +48,7 @@ const App = struct {
 
         // Jump input
         if (self.io.justPressed(.space)) {
-            self.physics.jump(20.0);
+            self.physics.jump(5.0);
         }
 
         // Mouse look
@@ -82,7 +82,6 @@ export fn init() void { app = App.init(); }
 export fn frame() void { app.update(); app.render(); }
 export fn cleanup() void { app.deinit(); }
 export fn event(ev: [*c]const sapp.Event) void { app.io.update(ev); }
-
 pub fn main() void {
     sapp.run(.{
         .init_cb = init, .frame_cb = frame, .cleanup_cb = cleanup, .event_cb = event,
