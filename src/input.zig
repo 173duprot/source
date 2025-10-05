@@ -152,21 +152,6 @@ pub const Mouse = struct {
         sapp.setMouseCursor(cursor);
         self.cursor = cursor;
     }
-
-    // Consume delta and clear atomically - prevents lost input
-    pub fn consumeDelta(self: *Mouse) Vec2 {
-        const result = Vec2{ .x = self.dx, .y = self.dy };
-        self.dx = 0;
-        self.dy = 0;
-        return result;
-    }
-
-    pub fn consumeScroll(self: *Mouse) Vec2 {
-        const result = Vec2{ .x = self.scroll_x, .y = self.scroll_y };
-        self.scroll_x = 0;
-        self.scroll_y = 0;
-        return result;
-    }
 };
 
 pub const IO = struct {
@@ -236,10 +221,17 @@ pub const IO = struct {
         return self.touches[idx];
     }
 
-    // Frame management - only for key edge detection
-    pub fn beginFrame(self: *IO) void {
+    // Clear per-frame input state - call at end of frame after reading input
+    pub fn cleanInput(self: *IO) void {
         // Copy key state for justPressed/justReleased detection
         @memcpy(&self.keys_prev, &self.keys);
+
+        // Clear per-frame accumulated input
+        self.mouse.dx = 0;
+        self.mouse.dy = 0;
+        self.mouse.scroll_x = 0;
+        self.mouse.scroll_y = 0;
+        self.char_code = 0;
 
         // Clear per-frame window state
         self.window_resized = false;

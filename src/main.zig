@@ -28,8 +28,6 @@ export fn init() void {
 }
 
 export fn frame() void {
-    state.io.beginFrame(); // Copy key state for edge detection
-
     const dt: f32 = @floatCast(sapp.frameDuration() * 60);
     state.angle += 1.0 * dt;
 
@@ -43,16 +41,15 @@ export fn frame() void {
     const vertical = state.io.axis(.left_shift, .space);
     if (vertical != 0) state.camera.translate(Vec3.up().scale(vertical * speed));
 
-    // Mouse look when locked - consume delta atomically
+    // Mouse look when locked - read deltas directly (auto-cleared each frame)
     if (state.io.mouse.isLocked()) {
         const sensitivity: f32 = 0.002;
-        const delta = state.io.mouse.consumeDelta();
-        state.camera.rotate(Vec3.up(), -delta.x * sensitivity, state.camera.position);
-        state.camera.rotate(state.camera.right(), -delta.y * sensitivity, state.camera.position);
+        state.camera.rotate(Vec3.up(), -state.io.mouse.dx * sensitivity, state.camera.position);
+        state.camera.rotate(state.camera.right(), -state.io.mouse.dy * sensitivity, state.camera.position);
     }
 
     // Toggle mouse lock: Escape to unlock, Left-click to lock
-    if (state.io.pressed(.escape)) {
+    if (state.io.justPressed(.escape)) {
         state.io.mouse.unlock();
     }
     if (state.io.mouse.left and !state.io.mouse.isLocked()) {
@@ -67,6 +64,9 @@ export fn frame() void {
     const mvp = Mat4.mul(Mat4.mul(proj, view), model);
 
     state.renderer.draw(mvp);
+
+    // Clear per-frame input at end of frame, after all logic has read it
+    state.io.cleanInput();
 }
 
 export fn cleanup() void {
