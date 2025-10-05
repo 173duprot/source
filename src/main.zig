@@ -6,34 +6,52 @@ const Mat4 = za.Mat4;
 const r = @import("render.zig");
 const shd = @import("shaders/cube.glsl.zig");
 const input = @import("input.zig");
+const physics = @import("physics.zig");
 
 const App = struct {
     renderer: r.Renderer,
     camera: r.Camera3D,
     io: input.IO = .{},
     angle: f32 = 0.0,
+    physics: physics.Physics = .{},
 
     fn init() App {
         var self = App{
             .renderer = r.Renderer.init(r.Mesh.cube(), .{ 0.25, 0.5, 0.75, 1.0 }),
-            .camera = r.Camera3D.init(Vec3.new(0, 2, 6), Vec3.new(0, 0, 0), 60.0),
+            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), Vec3.new(0, 1, 0), 60.0),
         };
         self.renderer.shader(shd.cubeShaderDesc(sokol.gfx.queryBackend()));
         return self;
     }
 
     fn update(self: *App) void {
-        const dt: f32 = @floatCast(sapp.frameDuration() * 60);
-        self.angle += dt;
+        const dt: f32 = @floatCast(sapp.frameDuration());
+        self.angle += dt * 60;
 
-        const speed: f32 = 0.1 * dt;
+        // Camera movement - horizontal only (don't affect Y)
+        const speed: f32 = 0.1 * dt * 60;
         const move = self.io.vec2(.a, .d, .s, .w);
-        if (move.x != 0) self.camera.translate(self.camera.right().scale(move.x * speed));
-        if (move.y != 0) self.camera.translate(self.camera.forward().scale(move.y * speed));
 
-        const vertical = self.io.axis(.left_shift, .space);
-        if (vertical != 0) self.camera.translate(Vec3.up().scale(vertical * speed));
+        if (move.x != 0) {
+            const right = self.camera.right();
+            const offset = Vec3.new(right.x(), 0, right.z()).norm().scale(move.x * speed);
+            self.camera.translate(offset);
+        }
+        if (move.y != 0) {
+            const forward = self.camera.forward();
+            const offset = Vec3.new(forward.x(), 0, forward.z()).norm().scale(move.y * speed);
+            self.camera.translate(offset);
+        }
 
+        // Physics update
+        self.physics.update(&self.camera.position, dt);
+
+        // Jump input
+        if (self.io.justPressed(.space)) {
+            self.physics.jump(20.0);
+        }
+
+        // Mouse look
         if (self.io.mouse.isLocked()) {
             self.camera.rotate(Vec3.up(), -self.io.mouse.dx * 0.002, self.camera.position);
             self.camera.rotate(self.camera.right(), -self.io.mouse.dy * 0.002, self.camera.position);
