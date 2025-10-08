@@ -16,24 +16,28 @@ const App = struct {
     io: input.IO = .{},
     angle: f32 = 0.0,
     physics: physics.Physics = .{},
-    bsp_data: ?bsp.BspData = null,
-    mesh_data: ?bsp.MeshData = null,
+    bsp_data: ?bsp.BSP = null,
+    mesh_data: ?bsp.Mesh = null,
     allocator: std.mem.Allocator,
 
     fn init(a: std.mem.Allocator) !App {
-        var self = App{ .renderer = undefined, .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0), .allocator = a };
+        var self = App{
+            .renderer = undefined,
+            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
+            .allocator = a
+        };
 
         if (loadBsp(a, "src/maps/base.bsp")) |loaded| {
             self.bsp_data = loaded.bsp;
             self.mesh_data = loaded.mesh;
             self.renderer = try r.Renderer.initFromBsp(a, &self.mesh_data.?, .{ 0.1, 0.1, 0.15, 1.0 }, .{ 0.7, 0.7, 0.8, 1.0 });
 
-            if (loaded.bsp.spawn_point) |spawn| {
+            if (loaded.bsp.spawn) |spawn| {
                 const s = 0.03125;
-                self.camera = r.Camera3D.init(Vec3.new(spawn.origin.x() * s, spawn.origin.z() * s, -spawn.origin.y() * s), std.math.degreesToRadians(spawn.angle), 0.0, 60.0);
-                std.debug.print("Spawned at: ({d:.2}, {d:.2}, {d:.2}) facing {d:.1}°\n", .{ spawn.origin.x(), spawn.origin.y(), spawn.origin.z(), spawn.angle });
+                self.camera = r.Camera3D.init(Vec3.new(spawn.x() * s, spawn.z() * s, -spawn.y() * s), 0.0, 0.0, 60.0);
+                std.debug.print("Spawned at: ({d:.2}, {d:.2}, {d:.2})\n", .{ spawn.x(), spawn.y(), spawn.z() });
             }
-            std.debug.print("Loaded BSP: {} vertices, {} faces\n", .{ loaded.bsp.vertices.len, loaded.bsp.faces.len });
+            std.debug.print("Loaded BSP: {} vertices, {} faces\n", .{ loaded.bsp.verts.len, loaded.bsp.faces.len });
         } else |err| {
             std.debug.print("Failed to load BSP ({}), using cube\n", .{err});
             self.renderer = r.Renderer.init(r.Mesh.cube(), .{ 0.25, 0.5, 0.75, 1.0 });
@@ -43,10 +47,10 @@ const App = struct {
         return self;
     }
 
-    fn loadBsp(a: std.mem.Allocator, path: []const u8) !struct { bsp: bsp.BspData, mesh: bsp.MeshData } {
-        var data = try bsp.loadBsp(a, path);
+    fn loadBsp(a: std.mem.Allocator, path: []const u8) !struct { bsp: bsp.BSP, mesh: bsp.Mesh } {
+        var data = try bsp.BSP.load(a, path);
         errdefer data.deinit();
-        return .{ .bsp = data, .mesh = try bsp.bspToMesh(a, &data) };
+        return .{ .bsp = data, .mesh = try data.mesh(a) };
     }
 
     fn update(self: *App) void {
@@ -77,7 +81,10 @@ const App = struct {
     }
 
     fn deinit(self: *App) void {
-        if (self.mesh_data) |*m| m.deinit();
+        if (self.mesh_data) |m| {
+            self.allocator.free(m.v);
+            self.allocator.free(m.i);
+        }
         if (self.bsp_data) |*b| b.deinit();
         self.renderer.deinit();
     }
@@ -90,7 +97,11 @@ export fn init() void {
     const a = gpa.allocator();
     app = App.init(a) catch |err| blk: {
         std.debug.print("Failed to initialize app: {}\n", .{err});
-        var fallback = App{ .renderer = r.Renderer.init(r.Mesh.cube(), .{ 0.25, 0.5, 0.75, 1.0 }), .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0), .allocator = a };
+        var fallback = App{
+            .renderer = r.Renderer.init(r.Mesh.cube(), .{ 0.25, 0.5, 0.75, 1.0 }),
+            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
+            .allocator = a
+        };
         fallback.renderer.shader(shd.cubeShaderDesc(sokol.gfx.queryBackend()));
         break :blk fallback;
     };

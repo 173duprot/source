@@ -46,21 +46,21 @@ pub const Renderer = struct {
         };
     }
 
-    pub fn initFromBsp(a: std.mem.Allocator, md: *const bsp.MeshData, clr: [4]f32, col: [4]f32) !Renderer {
+    pub fn initFromBsp(a: std.mem.Allocator, md: *const bsp.Mesh, clr: [4]f32, col: [4]f32) !Renderer {
         sg.setup(.{ .environment = sglue.environment(), .logger = .{ .func = sokol.log.func } });
 
-        const v = try a.alloc(Vertex, md.vertices.len / 3);
+        const v = try a.alloc(Vertex, md.v.len / 3);
         defer a.free(v);
 
-        for (v, 0..) |*vx, i| vx.* = .{ .pos = .{ md.vertices[i*3], md.vertices[i*3+1], md.vertices[i*3+2] }, .col = col };
+        for (v, 0..) |*vx, i| vx.* = .{ .pos = .{ md.v[i*3], md.v[i*3+1], md.v[i*3+2] }, .col = col };
 
         return .{
             .bind = .{
                 .vertex_buffers = .{ sg.makeBuffer(.{ .data = sg.asRange(v) }), .{}, .{}, .{}, .{}, .{}, .{}, .{} },
-                .index_buffer = sg.makeBuffer(.{ .usage = .{ .index_buffer = true }, .data = sg.asRange(md.indices) }),
+                .index_buffer = sg.makeBuffer(.{ .usage = .{ .index_buffer = true }, .data = sg.asRange(md.i) }),
             },
             .pass = .{ .colors = .{ .{ .load_action = .CLEAR, .clear_value = .{ .r = clr[0], .g = clr[1], .b = clr[2], .a = clr[3] } }, .{}, .{}, .{}, .{}, .{}, .{}, .{} } },
-            .count = @intCast(md.indices.len),
+            .count = @intCast(md.i.len),
             .itype = .UINT32,
         };
     }
