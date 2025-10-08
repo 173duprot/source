@@ -16,15 +16,17 @@ pub const Mesh = struct { v: []f32, i: []u32 };
 pub const Trace = struct { frac: f32 = 1, n: Vec3 = Vec3.zero(), solid: bool = false, hit: bool = false };
 pub const Box = struct { min: Vec3, max: Vec3 };
 
-fn rd(comptime T: type, a: std.mem.Allocator, f: std.fs.File, l: Lump) ![]T {
+fn rd(comptime T: type, a: std.mem.Allocator, data: []const u8, l: Lump) ![]T {
     if (l.len == 0) return &[_]T{};
-    const d = try a.alloc(T, @intCast(@divExact(l.len, @sizeOf(T)))); try f.seekTo(@intCast(l.ofs));
-    return if (try f.read(std.mem.sliceAsBytes(d)) == l.len) d else error.Read;
+    const count = @divExact(l.len, @sizeOf(T));
+    const d = try a.alloc(T, @intCast(count));
+    const src: [*]const T = @ptrCast(@alignCast(data.ptr + @as(usize, @intCast(l.ofs))));
+    @memcpy(d, src[0..@intCast(count)]);
+    return d;
 }
 
-fn spawn(a: std.mem.Allocator, f: std.fs.File, l: Lump) !?Vec3 {
-    if (l.len == 0) return null;
-    const d = try a.alloc(u8, @intCast(l.len)); defer a.free(d); try f.seekTo(@intCast(l.ofs)); _ = try f.read(d);
+fn spawn(a: std.mem.Allocator, d: []const u8) !?Vec3 {
+    _ = a;
     var it = std.mem.splitScalar(u8, d, '\n'); var o: ?Vec3 = null;
     while (it.next()) |ln| {
         const t = std.mem.trim(u8, ln, " \t\r");
@@ -45,10 +47,12 @@ pub const BSP = struct {
         inline for (.{ self.verts, self.edges, self.sedges, self.faces, self.planes, self.nodes, self.models, self.clips, self.leafs }) |d| self.a.free(d);
     }
 
-    pub fn load(a: std.mem.Allocator, path: []const u8) !BSP {
-        const f = try std.fs.cwd().openFile(path, .{}); defer f.close(); var h: Header = undefined; _ = try f.read(std.mem.asBytes(&h));
+    pub fn load(a: std.mem.Allocator, data: []const u8) !BSP {
+        if (data.len < @sizeOf(Header)) return error.BadData;
+        const h: *const Header = @ptrCast(@alignCast(data.ptr));
         if (h.ver != 29) return error.BadVer;
-        return .{ .verts = try rd(Vertex, a, f, h.lumps[3]), .edges = try rd(Edge, a, f, h.lumps[12]), .sedges = try rd(i32, a, f, h.lumps[13]), .faces = try rd(Face, a, f, h.lumps[7]), .planes = try rd(Plane, a, f, h.lumps[1]), .nodes = try rd(Node, a, f, h.lumps[5]), .models = try rd(Model, a, f, h.lumps[14]), .clips = try rd(ClipNode, a, f, h.lumps[9]), .leafs = try rd(Leaf, a, f, h.lumps[10]), .spawn = try spawn(a, f, h.lumps[0]), .a = a };
+        const spawn_data = if (h.lumps[0].len > 0) data[@intCast(h.lumps[0].ofs)..@intCast(h.lumps[0].ofs + h.lumps[0].len)] else &[_]u8{};
+        return .{ .verts = try rd(Vertex, a, data, h.lumps[3]), .edges = try rd(Edge, a, data, h.lumps[12]), .sedges = try rd(i32, a, data, h.lumps[13]), .faces = try rd(Face, a, data, h.lumps[7]), .planes = try rd(Plane, a, data, h.lumps[1]), .nodes = try rd(Node, a, data, h.lumps[5]), .models = try rd(Model, a, data, h.lumps[14]), .clips = try rd(ClipNode, a, data, h.lumps[9]), .leafs = try rd(Leaf, a, data, h.lumps[10]), .spawn = try spawn(a, spawn_data), .a = a };
     }
 
     pub fn mesh(self: *const BSP, a: std.mem.Allocator) !Mesh {

@@ -5,15 +5,15 @@ const za = @import("zalgebra");
 const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
 
-const r = @import("render.zig");
-const shd = @import("shaders/cube.glsl.zig");
+const rend = @import("render.zig");
+const shade = @import("shaders/cube.glsl.zig");
 const input = @import("input.zig");
 const physics = @import("physics.zig");
 const bsp = @import("bsp.zig");
 
 const App = struct {
-    renderer: r.Renderer,
-    camera: r.Camera3D,
+    renderer: rend.Renderer,
+    camera: rend.Camera3D,
     io: input.IO = .{},
     physics: physics.Physics = .{},
     bsp_data: ?bsp.BSP = null,
@@ -23,17 +23,18 @@ const App = struct {
     fn init(a: std.mem.Allocator) !App {
         var self = App{
             .renderer = undefined,
-            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
+            .camera = rend.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
             .a = a,
         };
 
-        var data = try bsp.BSP.load(a, "src/maps/base.bsp");
+        var data = try bsp.BSP.load(a, @embedFile("maps/base.bsp"));
+        std.log.info("BSP data size: {} bytes", .{@embedFile("maps/base.bsp").len});
         errdefer data.deinit();
         const mesh = try data.mesh(a);
 
         self.bsp_data = data;
         self.mesh_data = mesh;
-        self.renderer = try r.Renderer.initFromBsp(a, &mesh, .{ 0.1, 0.1, 0.15, 1.0 }, .{ 0.7, 0.7, 0.8, 1.0 });
+        self.renderer = try rend.Renderer.initFromBsp(a, &mesh, .{ 0.1, 0.1, 0.15, 1.0 }, .{ 0.7, 0.7, 0.8, 1.0 });
 
         // Set spawn position AFTER creating renderer
         if (data.spawn) |spawn| {
@@ -45,7 +46,7 @@ const App = struct {
             std.debug.print("Raw spawn: ({d:.2}, {d:.2}, {d:.2})\n", .{ spawn.x(), spawn.y(), spawn.z() });
             std.debug.print("Scaled spawn: ({d:.2}, {d:.2}, {d:.2})\n", .{ spawn_x, spawn_y, spawn_z });
 
-            self.camera = r.Camera3D.init(Vec3.new(spawn_x, spawn_y, spawn_z), 0.0, 0.0, 60.0);
+            self.camera = rend.Camera3D.init(Vec3.new(spawn_x, spawn_y, spawn_z), 0.0, 0.0, 60.0);
             self.physics.grounded = true; // Prevent initial fall
         } else {
             std.debug.print("WARNING: No spawn point found in BSP!\n", .{});
@@ -54,7 +55,7 @@ const App = struct {
         std.debug.print("Loaded BSP: {} vertices, {} faces\n", .{ data.verts.len, data.faces.len });
         std.debug.print("Camera position: ({d:.2}, {d:.2}, {d:.2})\n", .{ self.camera.position.x(), self.camera.position.y(), self.camera.position.z() });
 
-        self.renderer.shader(shd.cubeShaderDesc(sokol.gfx.queryBackend()));
+        self.renderer.shader(shade.cubeShaderDesc(sokol.gfx.queryBackend()));
         return self;
     }
 
