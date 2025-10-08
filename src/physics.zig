@@ -6,7 +6,7 @@ pub const Physics = struct {
     vel: Vec3 = Vec3.zero(), gravity: f32 = 9.8, ground: f32 = 1.0, grounded: bool = true,
 
     pub fn jump(self: *Physics, force: f32) void {
-        if (self.grounded) { self.vel.data[1] = force; self.grounded = false; }
+        self.vel.data[1] = force; self.grounded = false;
     }
 
     pub fn accel(self: *Physics, wishdir: Vec3, speed: f32, dt: f32) void {
