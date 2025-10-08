@@ -12,8 +12,8 @@ void main() { gl_Position = mvp * position; frag_pos = position.xyz; color = col
 in vec4 color; in vec3 frag_pos; out vec4 frag_color;
 void main() {
     vec3 n = normalize(cross(dFdx(frag_pos), dFdy(frag_pos)));
-    float diff = max(dot(n, normalize(vec3(0.5, 1.0, 0.3))), 0.0);
-    frag_color = vec4(color.rgb * (0.4 + diff * 0.6), color.a);
+    float h = fract(sin(dot(n, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+    frag_color = vec4(color.rgb * (h * 0.8 + 0.2), color.a);
 }
 @end
 
