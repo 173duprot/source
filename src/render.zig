@@ -1,11 +1,11 @@
 const std = @import("std");
 const sokol = @import("sokol");
-const sg = sokol.gfx;
-const sglue = sokol.glue;
+    const sg = sokol.gfx;
+    const sglue = sokol.glue;
 const za = @import("zalgebra");
-const Vec3 = za.Vec3;
-const Mat4 = za.Mat4;
-const bsp = @import("bsp.zig");
+    const Vec3 = za.Vec3;
+    const Mat4 = za.Mat4;
+const map = @import("map.zig");
 
 pub const Camera3D = struct {
     position: Vec3, yaw: f32, pitch: f32, fov: f32,
@@ -53,7 +53,7 @@ pub const Renderer = struct {
         };
     }
 
-    pub fn initFromBsp(a: std.mem.Allocator, md: *const bsp.Mesh, clr: [4]f32, col: [4]f32) !Renderer {
+    pub fn initFromBsp(a: std.mem.Allocator, md: *const map.Mesh, clr: [4]f32, col: [4]f32) !Renderer {
         sg.setup(.{ .environment = sglue.environment(), .logger = .{ .func = sokol.log.func } });
         const v = try a.alloc(Vertex, md.v.len / 3); defer a.free(v);
         for (v, 0..) |*vx, i| vx.* = .{ .pos = .{ md.v[i * 3], md.v[i * 3 + 1], md.v[i * 3 + 2] }, .col = col };

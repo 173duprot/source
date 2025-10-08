@@ -1,6 +1,6 @@
 const std = @import("std");
 const za = @import("zalgebra");
-const Vec3 = za.Vec3;
+    const Vec3 = za.Vec3;
 
 pub const Physics = struct {
     vel: Vec3 = Vec3.zero(), gravity: f32 = 9.8, ground: f32 = 1.0, grounded: bool = true,

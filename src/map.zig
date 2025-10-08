@@ -1,6 +1,6 @@
 const std = @import("std");
 const za = @import("zalgebra");
-const Vec3 = za.Vec3;
+    const Vec3 = za.Vec3;
 
 const Lump = extern struct { ofs: i32, len: i32 };
 const Header = extern struct { ver: i32, lumps: [15]Lump };

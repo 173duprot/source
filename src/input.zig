@@ -1,6 +1,6 @@
 const std = @import("std");
 const sokol = @import("sokol");
-const sapp = sokol.app;
+    const sapp = sokol.app;
 
 pub const Key = enum(u16) {
     a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,

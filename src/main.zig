@@ -1,23 +1,23 @@
 const std = @import("std");
 const sokol = @import("sokol");
-const sapp = sokol.app;
+    const sapp = sokol.app;
 const za = @import("zalgebra");
-const Vec3 = za.Vec3;
-const Mat4 = za.Mat4;
+    const Vec3 = za.Vec3;
+    const Mat4 = za.Mat4;
 
 const rend = @import("render.zig");
 const shade = @import("shaders/cube.glsl.zig");
 const input = @import("input.zig");
 const physics = @import("physics.zig");
-const bsp = @import("bsp.zig");
+const map = @import("map.zig");
 
 const App = struct {
     renderer: rend.Renderer,
     camera: rend.Camera3D,
     io: input.IO = .{},
     physics: physics.Physics = .{},
-    bsp_data: ?bsp.BSP = null,
-    mesh_data: ?bsp.Mesh = null,
+    bsp_data: ?map.BSP = null,
+    mesh_data: ?map.Mesh = null,
     a: std.mem.Allocator,
 
     fn init(a: std.mem.Allocator) !App {
@@ -27,7 +27,7 @@ const App = struct {
             .a = a,
         };
 
-        var data = try bsp.BSP.load(a, @embedFile("maps/base.bsp"));
+        var data = try map.BSP.load(a, @embedFile("maps/base.bsp"));
         std.log.info("BSP data size: {} bytes", .{@embedFile("maps/base.bsp").len});
         errdefer data.deinit();
         const mesh = try data.mesh(a);
