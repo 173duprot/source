@@ -11,52 +11,32 @@ const physics = @import("physics.zig");
 const bsp = @import("bsp.zig");
 
 const App = struct {
-    renderer: r.Renderer,
-    camera: r.Camera3D,
-    io: input.IO = .{},
-    angle: f32 = 0.0,
-    physics: physics.Physics = .{},
-    bsp_data: ?bsp.BSP = null,
-    mesh_data: ?bsp.Mesh = null,
-    allocator: std.mem.Allocator,
+    renderer: r.Renderer, camera: r.Camera3D, io: input.IO = .{}, physics: physics.Physics = .{},
+    bsp_data: ?bsp.BSP = null, mesh_data: ?bsp.Mesh = null, a: std.mem.Allocator,
 
     fn init(a: std.mem.Allocator) !App {
-        var self = App{
-            .renderer = undefined,
-            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
-            .allocator = a
-        };
+        var self = App{ .renderer = undefined, .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0), .a = a };
 
-        if (loadBsp(a, "src/maps/base.bsp")) |loaded| {
-            self.bsp_data = loaded.bsp;
-            self.mesh_data = loaded.mesh;
-            self.renderer = try r.Renderer.initFromBsp(a, &self.mesh_data.?, .{ 0.1, 0.1, 0.15, 1.0 }, .{ 0.7, 0.7, 0.8, 1.0 });
+        var data = try bsp.BSP.load(a, "src/maps/base.bsp");
+        errdefer data.deinit();
+        const mesh = try data.mesh(a);
 
-            if (loaded.bsp.spawn) |spawn| {
-                const s = 0.03125;
-                self.camera = r.Camera3D.init(Vec3.new(spawn.x() * s, spawn.z() * s, -spawn.y() * s), 0.0, 0.0, 60.0);
-                std.debug.print("Spawned at: ({d:.2}, {d:.2}, {d:.2})\n", .{ spawn.x(), spawn.y(), spawn.z() });
-            }
-            std.debug.print("Loaded BSP: {} vertices, {} faces\n", .{ loaded.bsp.verts.len, loaded.bsp.faces.len });
-        } else |err| {
-            std.debug.print("Failed to load BSP ({}), using cube\n", .{err});
-            self.renderer = r.Renderer.init(r.Mesh.cube(), .{ 0.25, 0.5, 0.75, 1.0 });
+        self.bsp_data = data; self.mesh_data = mesh;
+        self.renderer = try r.Renderer.initFromBsp(a, &mesh, .{ 0.1, 0.1, 0.15, 1.0 }, .{ 0.7, 0.7, 0.8, 1.0 });
+
+        if (data.spawn) |spawn| {
+            const s = 0.03125;
+            self.camera = r.Camera3D.init(Vec3.new(spawn.x() * s, spawn.z() * s, -spawn.y() * s), 0.0, 0.0, 60.0);
+            std.debug.print("Spawned at: ({d:.2}, {d:.2}, {d:.2})\n", .{ spawn.x(), spawn.y(), spawn.z() });
         }
 
+        std.debug.print("Loaded BSP: {} vertices, {} faces\n", .{ data.verts.len, data.faces.len });
         self.renderer.shader(shd.cubeShaderDesc(sokol.gfx.queryBackend()));
         return self;
     }
 
-    fn loadBsp(a: std.mem.Allocator, path: []const u8) !struct { bsp: bsp.BSP, mesh: bsp.Mesh } {
-        var data = try bsp.BSP.load(a, path);
-        errdefer data.deinit();
-        return .{ .bsp = data, .mesh = try data.mesh(a) };
-    }
-
     fn update(self: *App) void {
         const dt: f32 = @floatCast(sapp.frameDuration());
-        if (self.bsp_data == null) self.angle += dt * 60;
-
         const spd: f32 = 0.1 * dt * 60;
         const mv = self.io.vec2(.a, .d, .s, .w);
 
@@ -73,18 +53,13 @@ const App = struct {
     fn render(self: *App) void {
         const mvp = Mat4.mul(Mat4.mul(
             self.camera.projectionMatrix(sapp.widthf() / sapp.heightf(), 0.1, 1000.0),
-            self.camera.viewMatrix()),
-            if (self.bsp_data != null) Mat4.identity() else Mat4.fromRotation(self.angle, Vec3.new(0.5, 1, 0).norm())
-        );
+            self.camera.viewMatrix()
+        ), Mat4.identity());
         self.renderer.draw(mvp);
-        self.io.cleanInput();
     }
 
     fn deinit(self: *App) void {
-        if (self.mesh_data) |m| {
-            self.allocator.free(m.v);
-            self.allocator.free(m.i);
-        }
+        if (self.mesh_data) |m| { self.a.free(m.v); self.a.free(m.i); }
         if (self.bsp_data) |*b| b.deinit();
         self.renderer.deinit();
     }
@@ -93,45 +68,15 @@ const App = struct {
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var app: App = undefined;
 
-export fn init() void {
-    const a = gpa.allocator();
-    app = App.init(a) catch |err| blk: {
-        std.debug.print("Failed to initialize app: {}\n", .{err});
-        var fallback = App{
-            .renderer = r.Renderer.init(r.Mesh.cube(), .{ 0.25, 0.5, 0.75, 1.0 }),
-            .camera = r.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
-            .allocator = a
-        };
-        fallback.renderer.shader(shd.cubeShaderDesc(sokol.gfx.queryBackend()));
-        break :blk fallback;
-    };
-}
-
-export fn frame() void {
-    app.update();
-    app.render();
-}
-
-export fn cleanup() void {
-    app.deinit();
-    _ = gpa.deinit();
-}
-
-export fn event(ev: [*c]const sapp.Event) void {
-    app.io.update(ev);
-}
+export fn init() void { app = App.init(gpa.allocator()) catch unreachable; }
+export fn frame() void { app.update(); app.render(); app.io.cleanInput(); }
+export fn cleanup() void { app.deinit(); _ = gpa.deinit(); }
+export fn event(ev: [*c]const sapp.Event) void { app.io.update(ev); }
 
 pub fn main() void {
     sapp.run(.{
-        .init_cb = init,
-        .frame_cb = frame,
-        .cleanup_cb = cleanup,
-        .event_cb = event,
-        .width = 800,
-        .height = 600,
-        .sample_count = 4,
-        .icon = .{ .sokol_default = true },
-        .window_title = "BSP Viewer",
-        .logger = .{ .func = sokol.log.func },
+        .init_cb = init, .frame_cb = frame, .cleanup_cb = cleanup, .event_cb = event,
+        .width = 800, .height = 600, .sample_count = 4, .icon = .{ .sokol_default = true },
+        .window_title = "BSP Viewer", .logger = .{ .func = sokol.log.func },
     });
 }
