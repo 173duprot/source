@@ -1,11 +1,10 @@
 const std = @import("std");
 const sokol = @import("sokol");
-    const sg = sokol.gfx;
-    const sglue = sokol.glue;
+const sg = sokol.gfx;
+const sglue = sokol.glue;
 const za = @import("zalgebra");
-    const Vec3 = za.Vec3;
-    const Mat4 = za.Mat4;
-const map = @import("map.zig");
+const Vec3 = za.Vec3;
+const Mat4 = za.Mat4;
 
 pub const Camera3D = struct {
     position: Vec3, yaw: f32, pitch: f32, fov: f32,
@@ -18,8 +17,13 @@ pub const Camera3D = struct {
         return Vec3.new(@cos(self.pitch) * @cos(self.yaw), @sin(self.pitch), @cos(self.pitch) * @sin(self.yaw));
     }
 
-    pub fn right(self: Camera3D) Vec3 { return self.forward().cross(Vec3.up()).norm(); }
-    pub fn move(self: *Camera3D, offset: Vec3) void { self.position = self.position.add(offset); }
+    pub fn right(self: Camera3D) Vec3 {
+        return self.forward().cross(Vec3.up()).norm();
+    }
+
+    pub fn move(self: *Camera3D, offset: Vec3) void {
+        self.position = self.position.add(offset);
+    }
 
     pub fn look(self: *Camera3D, dyaw: f32, dpitch: f32) void {
         self.yaw += dyaw;
@@ -38,7 +42,7 @@ pub const Camera3D = struct {
 pub const Vertex = extern struct { pos: [3]f32, col: [4]f32 };
 
 pub const Renderer = struct {
-    pip: sg.Pipeline = .{}, bind: sg.Bindings = .{}, pass: sg.PassAction, count: u32, itype: sg.IndexType,
+    pip: sg.Pipeline = .{}, bind: sg.Bindings = .{}, pass: sg.PassAction, count: u32,
 
     pub fn init(v: []const Vertex, i: []const u16, clr: [4]f32) Renderer {
         sg.setup(.{ .environment = sglue.environment(), .logger = .{ .func = sokol.log.func } });
@@ -49,29 +53,13 @@ pub const Renderer = struct {
             },
             .pass = .{ .colors = .{ .{ .load_action = .CLEAR, .clear_value = .{ .r = clr[0], .g = clr[1], .b = clr[2], .a = clr[3] } }, .{}, .{}, .{}, .{}, .{}, .{}, .{} } },
             .count = @intCast(i.len),
-            .itype = .UINT16,
-        };
-    }
-
-    pub fn initFromBsp(a: std.mem.Allocator, md: *const map.Mesh, clr: [4]f32, col: [4]f32) !Renderer {
-        sg.setup(.{ .environment = sglue.environment(), .logger = .{ .func = sokol.log.func } });
-        const v = try a.alloc(Vertex, md.v.len / 3); defer a.free(v);
-        for (v, 0..) |*vx, i| vx.* = .{ .pos = .{ md.v[i * 3], md.v[i * 3 + 1], md.v[i * 3 + 2] }, .col = col };
-        return .{
-            .bind = .{
-                .vertex_buffers = .{ sg.makeBuffer(.{ .data = sg.asRange(v) }), .{}, .{}, .{}, .{}, .{}, .{}, .{} },
-                .index_buffer = sg.makeBuffer(.{ .usage = .{ .index_buffer = true }, .data = sg.asRange(md.i) }),
-            },
-            .pass = .{ .colors = .{ .{ .load_action = .CLEAR, .clear_value = .{ .r = clr[0], .g = clr[1], .b = clr[2], .a = clr[3] } }, .{}, .{}, .{}, .{}, .{}, .{}, .{} } },
-            .count = @intCast(md.i.len),
-            .itype = .UINT32,
         };
     }
 
     pub fn shader(self: *Renderer, desc: sg.ShaderDesc) void {
         var l = sg.VertexLayoutState{};
         l.attrs[0].format = .FLOAT3; l.attrs[1].format = .FLOAT4;
-        self.pip = sg.makePipeline(.{ .shader = sg.makeShader(desc), .layout = l, .index_type = self.itype, .depth = .{ .compare = .LESS_EQUAL, .write_enabled = true }, .cull_mode = .BACK });
+        self.pip = sg.makePipeline(.{ .shader = sg.makeShader(desc), .layout = l, .index_type = .UINT16, .depth = .{ .compare = .LESS_EQUAL, .write_enabled = true }, .cull_mode = .BACK });
     }
 
     pub fn draw(self: Renderer, mvp: Mat4) void {

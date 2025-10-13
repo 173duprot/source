@@ -1,126 +1,115 @@
 const std = @import("std");
 const sokol = @import("sokol");
-    const sapp = sokol.app;
+const sapp = sokol.app;
 const za = @import("zalgebra");
-    const Vec3 = za.Vec3;
-    const Mat4 = za.Mat4;
+const Vec3 = za.Vec3;
+const Mat4 = za.Mat4;
 
 const rend = @import("render.zig");
 const shade = @import("shaders/cube.glsl.zig");
 const input = @import("input.zig");
-const physics = @import("physics.zig");
-const map = @import("map.zig");
+
+const Physics = struct {
+    vel: Vec3 = Vec3.zero(), gravity: f32 = 9.8, ground: f32 = 1.0, grounded: bool = true,
+
+    pub fn jump(self: *Physics, force: f32) void {
+        self.vel.data[1] = force; self.grounded = false;
+    }
+
+    pub fn accel(self: *Physics, wishdir: Vec3, speed: f32, dt: f32) void {
+        self.vel = self.vel.add(wishdir.norm().scale(speed * dt));
+    }
+
+    fn grav(self: *Physics, dt: f32) void { self.vel.data[1] -= self.gravity * dt; }
+
+    fn friction(self: *Physics, amount: f32, dt: f32) void {
+        if (self.grounded) {
+            const xz = Vec3.new(self.vel.x(), 0, self.vel.z());
+            const damped = xz.scale(1.0 - amount * dt);
+            self.vel.data[0] = damped.x(); self.vel.data[2] = damped.z();
+        }
+    }
+
+    fn collide(self: *Physics, pos: *Vec3) void {
+        if (pos.data[1] <= self.ground) {
+            pos.data[1] = self.ground; self.vel.data[1] = 0; self.grounded = true;
+        } else self.grounded = false;
+    }
+
+    pub fn update(self: *Physics, pos: *Vec3, dt: f32) void {
+        self.grav(dt); self.friction(8.0, dt);
+        pos.* = pos.add(self.vel.scale(dt));
+        self.collide(pos);
+    }
+};
 
 const App = struct {
-    renderer: rend.Renderer,
-    camera: rend.Camera3D,
+    pipeline: rend.Renderer,
+    cam: rend.Camera3D,
     io: input.IO = .{},
-    physics: physics.Physics = .{},
-    bsp_data: ?map.BSP = null,
-    mesh_data: ?map.Mesh = null,
-    a: std.mem.Allocator,
+    phys: Physics = .{},
 
-    fn init(a: std.mem.Allocator) !App {
-        var self = App{
-            .renderer = undefined,
-            .camera = rend.Camera3D.init(Vec3.new(0, 1, 6), 0.0, 0.0, 60.0),
-            .a = a,
+    fn init() !App {
+        const v = [_]rend.Vertex{
+            .{ .pos = .{ -5, 0, -5 }, .col = .{ 0.3, 0.3, 1, 1 } },
+            .{ .pos = .{  5, 0, -5 }, .col = .{ 0.3, 1, 0.35, 1 } },
+            .{ .pos = .{  5, 0,  5 }, .col = .{ 1, 0.3, 0.35, 1 } },
+            .{ .pos = .{ -5, 0,  5 }, .col = .{ 0.3, 0.3, 0.35, 1 } },
         };
-
-        var data = try map.BSP.load(a, @embedFile("maps/base.bsp"));
-        std.log.info("BSP data size: {} bytes", .{@embedFile("maps/base.bsp").len});
-        errdefer data.deinit();
-        const mesh = try data.mesh(a);
-
-        self.bsp_data = data;
-        self.mesh_data = mesh;
-        self.renderer = try rend.Renderer.initFromBsp(a, &mesh, .{ 0.1, 0.1, 0.15, 1.0 }, .{ 0.7, 0.7, 0.8, 1.0 });
-
-        // Set spawn position AFTER creating renderer
-        if (data.spawn) |spawn| {
-            const scale = 0.03125;
-            const spawn_x = spawn.x() * scale;
-            const spawn_y = spawn.z() * scale;
-            const spawn_z = -spawn.y() * scale;
-
-            std.debug.print("Raw spawn: ({d:.2}, {d:.2}, {d:.2})\n", .{ spawn.x(), spawn.y(), spawn.z() });
-            std.debug.print("Scaled spawn: ({d:.2}, {d:.2}, {d:.2})\n", .{ spawn_x, spawn_y, spawn_z });
-
-            self.camera = rend.Camera3D.init(Vec3.new(spawn_x, spawn_y, spawn_z), 0.0, 0.0, 60.0);
-            self.physics.grounded = true; // Prevent initial fall
-        } else {
-            std.debug.print("WARNING: No spawn point found in BSP!\n", .{});
-        }
-
-        std.debug.print("Loaded BSP: {} vertices, {} faces\n", .{ data.verts.len, data.faces.len });
-        std.debug.print("Camera position: ({d:.2}, {d:.2}, {d:.2})\n", .{ self.camera.position.x(), self.camera.position.y(), self.camera.position.z() });
-
-        self.renderer.shader(shade.cubeShaderDesc(sokol.gfx.queryBackend()));
+        const i = [_]u16{ 0, 1, 2, 0, 2, 3 };
+        var self = App{
+            .pipeline = rend.Renderer.init(&v, &i, .{ 0.1, 0.1, 0.15, 1 }),
+            .cam = rend.Camera3D.init(Vec3.new(0, 2, 5), 0, 0, 60),
+        };
+        self.pipeline.shader(shade.cubeShaderDesc(sokol.gfx.queryBackend()));
         return self;
     }
 
     fn update(self: *App) void {
         const dt: f32 = @floatCast(sapp.frameDuration());
-        const spd: f32 = 0.1 * dt * 60;
         const mv = self.io.vec2(.a, .d, .s, .w);
+        var dir = Vec3.zero();
 
         if (mv.x != 0) {
-            const right = self.camera.right();
-            const move_right = Vec3.new(right.x(), 0, right.z()).norm().scale(mv.x * spd);
-            self.camera.move(move_right);
+            const right = self.cam.right();
+            dir = dir.add(Vec3.new(right.x(), 0, right.z()).norm().scale(mv.x));
         }
         if (mv.y != 0) {
-            const forward = self.camera.forward();
-            const move_forward = Vec3.new(forward.x(), 0, forward.z()).norm().scale(mv.y * spd);
-            self.camera.move(move_forward);
+            const fwd = self.cam.forward();
+            dir = dir.add(Vec3.new(fwd.x(), 0, fwd.z()).norm().scale(mv.y));
         }
 
-        self.physics.update(&self.camera.position, dt);
-        if (self.io.justPressed(.space)) self.physics.jump(5.0);
-        if (self.io.mouse.isLocked()) self.camera.look(self.io.mouse.dx * 0.002, -self.io.mouse.dy * 0.002);
+        if (dir.length() > 0) self.phys.accel(dir, 5, dt);
+        if (self.io.justPressed(.space) and self.phys.grounded) self.phys.jump(5);
+        self.phys.update(&self.cam.position, dt);
+
+        if (self.io.mouse.isLocked())
+            self.cam.look(self.io.mouse.dx * 0.002, -self.io.mouse.dy * 0.002);
         if (self.io.justPressed(.escape)) self.io.mouse.unlock();
         if (self.io.mouse.left and !self.io.mouse.isLocked()) self.io.mouse.lock();
     }
 
     fn render(self: *App) void {
-        const aspect = sapp.widthf() / sapp.heightf();
-        const proj = self.camera.projectionMatrix(aspect, 0.1, 1000.0);
-        const view = self.camera.viewMatrix();
-        const mvp = Mat4.mul(Mat4.mul(proj, view), Mat4.identity());
-        self.renderer.draw(mvp);
+        const mvp = Mat4.mul(
+            Mat4.mul(
+                self.cam.projectionMatrix(sapp.widthf() / sapp.heightf(), 0.1, 1000),
+                self.cam.viewMatrix()
+            ),
+            Mat4.identity()
+        );
+        self.pipeline.draw(mvp);
     }
 
     fn deinit(self: *App) void {
-        if (self.mesh_data) |m| {
-            self.a.free(m.v);
-            self.a.free(m.i);
-        }
-        if (self.bsp_data) |*b| b.deinit();
-        self.renderer.deinit();
+        self.pipeline.deinit();
     }
 };
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var app: App = undefined;
-
-export fn init() void {
-    app = App.init(gpa.allocator()) catch unreachable;
-}
-
-export fn frame() void {
-    app.update();
-    app.render();
-    app.io.cleanInput();
-}
-
-export fn cleanup() void {
-    app.deinit();
-    _ = gpa.deinit();
-}
-
-export fn event(ev: [*c]const sapp.Event) void {
-    app.io.update(ev);
-}
+export fn init() void                           { app = App.init() catch unreachable; }
+export fn frame() void                          { app.update(); app.render(); app.io.cleanInput(); }
+export fn cleanup() void                        { app.deinit(); }
+export fn event(e: [*c]const sapp.Event) void   { app.io.update(e); }
 
 pub fn main() void {
     sapp.run(.{
@@ -128,11 +117,10 @@ pub fn main() void {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = event,
-        .width = 800,
-        .height = 600,
+        .width = 800, .height = 600,
         .sample_count = 4,
         .icon = .{ .sokol_default = true },
-        .window_title = "BSP Viewer",
+        .window_title = "Minimal Physics",
         .logger = .{ .func = sokol.log.func },
     });
 }
