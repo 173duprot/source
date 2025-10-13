@@ -1,9 +1,9 @@
 const std = @import("std");
 const sokol = @import("sokol");
 const sapp = sokol.app;
-const za = @import("zalgebra");
-const Vec3 = za.Vec3;
-const Mat4 = za.Mat4;
+const alg = @import("lib/algebra.zig");
+const Vec3 = alg.Vec3;
+const Mat4 = alg.Mat4;
 
 const rend = @import("render.zig");
 const shade = @import("shaders/cube.glsl.zig");

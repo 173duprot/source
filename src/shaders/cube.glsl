@@ -1,5 +1,5 @@
-@header const za = @import("zalgebra")
-@ctype mat4 za.Mat4
+@header const alg = @import("lib/algebra")
+@ctype mat4 alg.Mat4
 
 @vs vs
 layout(binding = 0) uniform vs_params { mat4 mvp; };

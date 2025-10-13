@@ -1,6 +1,6 @@
 const sg = @import("sokol").gfx;
 const std = @import("std");
-const za = @import("zalgebra");
+const alg = @import("lib/algebra");
 //
 //    #version:1# (machine generated, don't edit!)
 //
@@ -24,7 +24,7 @@ pub const ATTR_cube_position = 0;
 pub const ATTR_cube_color0 = 1;
 pub const UB_vs_params = 0;
 pub const VsParams = extern struct {
-    mvp: za.Mat4 align(16),
+    mvp: alg.Mat4 align(16),
 };
 //
 //    #version 410
