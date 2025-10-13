@@ -17,10 +17,6 @@ pub fn build(b: *Build) !void {
         .target = target,
         .optimize = optimize,
     });
-    const zalgebra_dep = b.dependency("zalgebra", .{
-        .target = target,
-        .optimize = optimize,
-    });
     const shdc_dep = b.dependency("shdc", .{});
 
     // Compile shader
@@ -46,7 +42,6 @@ pub fn build(b: *Build) !void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "sokol", .module = sokol_dep.module("sokol") },
-            .{ .name = "zalgebra", .module = zalgebra_dep.module("zalgebra") },
         },
     });
 
